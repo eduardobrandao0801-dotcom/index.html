@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pearl Hospitality</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<style>
+body{margin:0;font-family:Inter;background:#0A192F;color:white}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}
+.logo{width:140px;margin-bottom:20px}
+input{padding:12px;margin:8px;border-radius:10px;border:none;width:260px}
+button{padding:12px;border:none;border-radius:10px;background:#D4AF37;cursor:pointer;width:260px}
+.app{display:flex;height:100vh}
+.sidebar{width:240px;background:#060E1D;padding:20px}
+.content{flex:1;display:flex;align-items:center;justify-content:center}
+.card{width:320px;background:#112240;border-radius:20px;padding:20px}
+</style>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+
+// 🔥 COLE AQUI OS DADOS DO FIREBASE (eu explico abaixo)
+const firebaseConfig = {
+  apiKey: "PASTE_HERE",
+  authDomain: "PASTE_HERE",
+  projectId: "PASTE_HERE",
+  storageBucket: "PASTE_HERE"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+let jobs=[];
+let i=0;
+
+// AUTH STATE
+firebase.auth().onAuthStateChanged(user=>{
+  if(user){loadJobs();}
+  render(user);
+});
+
+// LOGIN
+async function login(){
+  const email=document.getElementById("email").value;
+  const pass=document.getElementById("pass").value;
+  await auth.signInWithEmailAndPassword(email,pass);
+}
+
+// SIGNUP
+async function signup(){
+  const email=document.getElementById("email").value;
+  const pass=document.getElementById("pass").value;
+
+  const res=await auth.createUserWithEmailAndPassword(email,pass);
+
+  await db.collection("users").doc(res.user.uid).set({
+    email,
+    createdAt:new Date()
+  });
+}
+
+// LOGOUT
+function logout(){auth.signOut();}
+
+// LOAD JOBS
+async function loadJobs(){
+  const snap=await db.collection("jobs").get();
+  jobs=snap.docs.map(doc=>({id:doc.id,...doc.data()}));
+  render(auth.currentUser);
+}
+
+// APPLY
+async function apply(job){
+  await db.collection("applications").add({
+    userId:auth.currentUser.uid,
+    jobId:job.id,
+    role:job.role,
+    hotel:job.hotel,
+    createdAt:new Date()
+  });
+  alert("Applied ✔");
+}
+
+// CV UPLOAD
+async function uploadCV(){
+  const file=document.getElementById("cv").files[0];
+  const ref=storage.ref("cvs/"+auth.currentUser.uid);
+
+  await ref.put(file);
+
+  const url=await ref.getDownloadURL();
+
+  await db.collection("users").doc(auth.currentUser.uid).update({cv:url});
+
+  alert("CV Uploaded ✔");
+}
+
+// SWIPE
+function swipe(dir){
+  if(dir==='right') apply(jobs[i]);
+  i++;
+  render(auth.currentUser);
+}
+
+// RENDER
+function render(user){
+  const app=document.getElementById("app");
+
+  if(!user){
+    app.innerHTML=`
+    <div class="center">
+      <img src="logo.png" class="logo">
+      <input id="email" placeholder="Email">
+      <input id="pass" type="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+      <button onclick="signup()">Create Account</button>
+    </div>`;
+    return;
+  }
+
+  const job=jobs[i];
+
+  app.innerHTML=`
+  <div class="app">
+    <div class="sidebar">
+      <img src="logo.png" class="logo">
+      <input type="file" id="cv">
+      <button onclick="uploadCV()">Upload CV</button>
+      <br><br>
+      <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="content">
+      ${job?`
+        <div class="card">
+          <h2>${job.role}</h2>
+          <p>${job.hotel}</p>
+          <p>${job.city}</p>
+          <p>${job.pay}</p>
+          <button onclick="swipe('right')">Apply</button>
+          <button onclick="swipe('left')">Skip</button>
+        </div>
+      `:`"<h2>No jobs available</h2>"}
+    </div>
+  </div>`;
+}
+
+</script>
+</body>
+</html>
